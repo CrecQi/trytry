@@ -139,6 +139,20 @@
         }
         .welcome h2 { font-size: 20px; margin-bottom: 12px; color: #000; }
         .welcome p { font-size: 15px; line-height: 1.6; }
+        .notice {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 6px;
+            padding: 12px 16px;
+            margin: 16px;
+            font-size: 14px;
+            color: #856404;
+        }
+        .notice a {
+            color: #07c160;
+            text-decoration: none;
+            font-weight: 500;
+        }
     </style>
 </head>
 <body>
@@ -150,6 +164,12 @@
         <div class="welcome">
             <h2>你好呀！👋</h2>
             <p>我是你的家庭智能助手<br>有什么问题都可以问我哦～</p>
+        </div>
+        <div class="notice">
+            💡 <strong>提示：</strong>我的回复会发送到飞书群，<a href="#" onclick="showFeishuLink(); return false;">点击查看</a>
+            <div id="feishuLink" style="display:none; margin-top:8px; font-size:13px;">
+                飞书链接：<a id="feishuUrl" href="" target="_blank">打开飞书查看回复</a>
+            </div>
         </div>
     </div>
     
@@ -177,24 +197,16 @@
         const sendBtn = document.getElementById('sendBtn');
         const typing = document.getElementById('typing');
         
-        // 简单的回复逻辑（纯前端版本）
-        const replies = {
-            '你好': ['你好呀！👋 有什么可以帮你的吗？', '嗨！很高兴见到你～', '你好！今天过得怎么样？'],
-            '天气': ['我暂时还不会查天气呢～不过你可以看看窗外！☀️', '天气这个话题嘛...我觉得晴天最好了！🌤️'],
-            '笑话': ['为什么程序员总是分不清万圣节和圣诞节？因为 Oct 31 == Dec 25！😄', '有一天，0 对 8 说：胖就胖呗，还系什么腰带啊！😂'],
-            '帮助': ['我可以陪你聊天、讲笑话、回答问题～虽然还在学习中，但会尽力帮你！😊', '目前我能做的是：聊天、讲笑话、简单问答。更多功能正在学习中！🚀'],
-            '名字': ['我叫家庭助手，是你的 AI 小伙伴！🤖', '你可以叫我小助，或者直接叫我也行～'],
-            '再见': ['拜拜！下次见～👋', '再见！祝你有美好的一天！✨'],
-            '谢谢': ['不客气！能帮到你我很开心～😊', '应该的！有问题随时找我！']
-        };
+        // 飞书 Webhook 配置
+        const FEISHU_WEBHOOK = 'https://open.feishu.cn/open-apis/bot/v2/hook/4fef08ba-c1d1-434d-8c08-ddc519e92143';
+        const FEISHU_GROUP_URL = 'https://bytedance.feishu.cn/'; // 替换成你的飞书群链接
         
-        const defaultReplies = [
-            '这个问题很有趣！让我想想... 🤔',
-            '收到你的消息啦！我会认真思考的～',
-            '嗯...这个角度我还没想过呢！',
-            '好问题！虽然我不太确定，但可以一起探索～',
-            ' interesting! 能再多说一点吗？'
-        ];
+        // 会话 ID（用于追踪对话）
+        let sessionId = sessionStorage.getItem('sessionId') || Date.now().toString();
+        sessionStorage.setItem('sessionId', sessionId);
+        
+        // 消息历史
+        let messageHistory = [];
         
         messageInput.addEventListener('input', function() {
             this.style.height = 'auto';
@@ -213,6 +225,11 @@
             sendMessage();
         }
         
+        function showFeishuLink() {
+            document.getElementById('feishuLink').style.display = 'block';
+            document.getElementById('feishuUrl').href = FEISHU_GROUP_URL;
+        }
+        
         function addMessage(text, isUser) {
             const welcome = chatContainer.querySelector('.welcome');
             if (welcome) welcome.remove();
@@ -225,6 +242,9 @@
             `;
             chatContainer.appendChild(msgDiv);
             chatContainer.scrollTop = chatContainer.scrollHeight;
+            
+            // 保存到历史
+            messageHistory.push({ role: isUser ? 'user' : 'bot', content: text, time: Date.now() });
         }
         
         function showTyping() {
@@ -242,16 +262,6 @@
             return div.innerHTML.replace(/\n/g, '<br>');
         }
         
-        function getReply(text) {
-            const lowerText = text.toLowerCase();
-            for (const [keyword, responses] of Object.entries(replies)) {
-                if (lowerText.includes(keyword.toLowerCase())) {
-                    return responses[Math.floor(Math.random() * responses.length)];
-                }
-            }
-            return defaultReplies[Math.floor(Math.random() * defaultReplies.length)];
-        }
-        
         async function sendMessage() {
             const text = messageInput.value.trim();
             if (!text) return;
@@ -260,15 +270,43 @@
             messageInput.value = '';
             messageInput.style.height = 'auto';
             
+            // 显示用户消息
             addMessage(text, true);
             showTyping();
             
-            // 模拟思考时间
-            await new Promise(resolve => setTimeout(resolve, 800 + Math.random() * 1200));
-            
-            const reply = getReply(text);
-            hideTyping();
-            addMessage(reply, false);
+            try {
+                // 发送到飞书
+                const feishuMessage = `[来自家庭网页] [会话:${sessionId}] ${text}`;
+                
+                const response = await fetch(FEISHU_WEBHOOK, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        msg_type: 'text',
+                        content: {
+                            text: feishuMessage
+                        }
+                    })
+                });
+                
+                const result = await response.json();
+                hideTyping();
+                
+                if (result.code === 0 || result.ok) {
+                    // 发送成功，显示提示
+                    addMessage('消息已发送到飞书！我会在飞书群里回复你，请打开飞书查看～ 📬', false);
+                    
+                    // 显示飞书链接
+                    setTimeout(() => {
+                        showFeishuLink();
+                    }, 500);
+                } else {
+                    addMessage('发送失败，请稍后再试～', false);
+                }
+            } catch (error) {
+                hideTyping();
+                addMessage('网络开小差了，请稍后再试～', false);
+            }
             
             sendBtn.disabled = false;
             messageInput.focus();
