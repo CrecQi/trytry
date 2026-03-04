@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>家庭助手</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+            background: #f5f5f5;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .header {
+            background: #ededed;
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            border-bottom: 1px solid #dcdcdc;
+        }
+        .header h1 {
+            font-size: 17px;
+            font-weight: 500;
+            color: #000;
+            flex: 1;
+            text-align: center;
+        }
+        .chat-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            background: #f5f5f5;
+        }
+        .message {
+            display: flex;
+            margin-bottom: 16px;
+            align-items: flex-start;
+        }
+        .message.bot { flex-direction: row; }
+        .message.user { flex-direction: row-reverse; }
+        .avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 6px;
+            background: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            flex-shrink: 0;
+        }
+        .message.bot .avatar { margin-right: 10px; background: #07c160; color: #fff; }
+        .message.user .avatar { margin-left: 10px; background: #07c160; color: #fff; }
+        .bubble {
+            max-width: 70%;
+            padding: 10px 14px;
+            border-radius: 6px;
+            font-size: 15px;
+            line-height: 1.5;
+            word-wrap: break-word;
+        }
+        .message.bot .bubble { background: #fff; border: 1px solid #e5e5e5; color: #000; }
+        .message.user .bubble { background: #07c160; color: #fff; }
+        .typing {
+            display: none;
+            padding: 12px 16px;
+            background: #f5f5f5;
+        }
+        .typing span {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #07c160;
+            margin-right: 4px;
+            animation: typing 1.4s infinite;
+        }
+        .typing span:nth-child(2) { animation-delay: 0.2s; }
+        .typing span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes typing {
+            0%, 60%, 100% { transform: translateY(0); }
+            30% { transform: translateY(-10px); }
+        }
+        .quick-actions {
+            padding: 8px 16px;
+            background: #f5f5f5;
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            border-top: 1px solid #e5e5e5;
+        }
+        .quick-btn {
+            background: #fff;
+            border: 1px solid #e5e5e5;
+            padding: 6px 12px;
+            border-radius: 16px;
+            font-size: 13px;
+            color: #07c160;
+            cursor: pointer;
+        }
+        .quick-btn:active { background: #f0f0f0; }
+        .input-area {
+            display: flex;
+            padding: 12px 16px;
+            background: #f7f7f7;
+            border-top: 1px solid #e5e5e5;
+            gap: 8px;
+        }
+        .input-wrapper { flex: 1; }
+        textarea {
+            width: 100%;
+            border: 1px solid #e5e5e5;
+            border-radius: 6px;
+            padding: 10px 14px;
+            font-size: 15px;
+            resize: none;
+            max-height: 100px;
+            font-family: inherit;
+        }
+        textarea:focus { outline: none; border-color: #07c160; }
+        button {
+            background: #07c160;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            padding: 0 20px;
+            font-size: 15px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        button:active { opacity: 0.8; }
+        .welcome {
+            text-align: center;
+            padding: 40px 20px;
+            color: #666;
+        }
+        .welcome h2 { font-size: 20px; margin-bottom: 12px; color: #000; }
+        .welcome p { font-size: 15px; line-height: 1.6; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🤖 家庭助手</h1>
+    </div>
+    
+    <div class="chat-container" id="chatContainer">
+        <div class="welcome">
+            <h2>你好呀！👋</h2>
+            <p>我是你的家庭智能助手<br>有什么问题都可以问我哦～</p>
+        </div>
+    </div>
+    
+    <div class="typing" id="typing">
+        <span></span><span></span><span></span>
+    </div>
+    
+    <div class="quick-actions" id="quickActions">
+        <button class="quick-btn" onclick="sendQuick('你好呀！')">👋 打个招呼</button>
+        <button class="quick-btn" onclick="sendQuick('今天天气怎么样？')">🌤️ 查天气</button>
+        <button class="quick-btn" onclick="sendQuick('讲个笑话听听')">😄 讲个笑话</button>
+        <button class="quick-btn" onclick="sendQuick('你能帮我做什么？')">❓ 你能做什么</button>
+    </div>
+    
+    <div class="input-area">
+        <div class="input-wrapper">
+            <textarea id="messageInput" placeholder="说点什么..." rows="1"></textarea>
+        </div>
+        <button id="sendBtn" onclick="sendMessage()">发送</button>
+    </div>
+
+    <script>
+        const chatContainer = document.getElementById('chatContainer');
+        const messageInput = document.getElementById('messageInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const typing = document.getElementById('typing');
+        
+        // 简单的回复逻辑（纯前端版本）
+        const replies = {
+            '你好': ['你好呀！👋 有什么可以帮你的吗？', '嗨！很高兴见到你～', '你好！今天过得怎么样？'],
+            '天气': ['我暂时还不会查天气呢～不过你可以看看窗外！☀️', '天气这个话题嘛...我觉得晴天最好了！🌤️'],
+            '笑话': ['为什么程序员总是分不清万圣节和圣诞节？因为 Oct 31 == Dec 25！😄', '有一天，0 对 8 说：胖就胖呗，还系什么腰带啊！😂'],
+            '帮助': ['我可以陪你聊天、讲笑话、回答问题～虽然还在学习中，但会尽力帮你！😊', '目前我能做的是：聊天、讲笑话、简单问答。更多功能正在学习中！🚀'],
+            '名字': ['我叫家庭助手，是你的 AI 小伙伴！🤖', '你可以叫我小助，或者直接叫我也行～'],
+            '再见': ['拜拜！下次见～👋', '再见！祝你有美好的一天！✨'],
+            '谢谢': ['不客气！能帮到你我很开心～😊', '应该的！有问题随时找我！']
+        };
+        
+        const defaultReplies = [
+            '这个问题很有趣！让我想想... 🤔',
+            '收到你的消息啦！我会认真思考的～',
+            '嗯...这个角度我还没想过呢！',
+            '好问题！虽然我不太确定，但可以一起探索～',
+            ' interesting! 能再多说一点吗？'
+        ];
+        
+        messageInput.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 100) + 'px';
+        });
+        
+        messageInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+        
+        function sendQuick(text) {
+            messageInput.value = text;
+            sendMessage();
+        }
+        
+        function addMessage(text, isUser) {
+            const welcome = chatContainer.querySelector('.welcome');
+            if (welcome) welcome.remove();
+            
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `message ${isUser ? 'user' : 'bot'}`;
+            msgDiv.innerHTML = `
+                <div class="avatar">${isUser ? '👤' : '🤖'}</div>
+                <div class="bubble">${escapeHtml(text)}</div>
+            `;
+            chatContainer.appendChild(msgDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+        
+        function showTyping() {
+            typing.style.display = 'block';
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+        
+        function hideTyping() {
+            typing.style.display = 'none';
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML.replace(/\n/g, '<br>');
+        }
+        
+        function getReply(text) {
+            const lowerText = text.toLowerCase();
+            for (const [keyword, responses] of Object.entries(replies)) {
+                if (lowerText.includes(keyword.toLowerCase())) {
+                    return responses[Math.floor(Math.random() * responses.length)];
+                }
+            }
+            return defaultReplies[Math.floor(Math.random() * defaultReplies.length)];
+        }
+        
+        async function sendMessage() {
+            const text = messageInput.value.trim();
+            if (!text) return;
+            
+            sendBtn.disabled = true;
+            messageInput.value = '';
+            messageInput.style.height = 'auto';
+            
+            addMessage(text, true);
+            showTyping();
+            
+            // 模拟思考时间
+            await new Promise(resolve => setTimeout(resolve, 800 + Math.random() * 1200));
+            
+            const reply = getReply(text);
+            hideTyping();
+            addMessage(reply, false);
+            
+            sendBtn.disabled = false;
+            messageInput.focus();
+        }
+    </script>
+</body>
+</html>
